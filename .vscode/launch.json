@@ -1,0 +1,17 @@
+{
+    "configurations": [
+        {
+            "showDevDebugOutput": true,
+            "cwd": "${workspaceRoot}/CustomInjectionECU",
+            "executable": "./build/CustomInjectionECU.elf",
+            "name": "Debug STM32",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "openocd",
+            "device": "stlink",
+            "configFiles": [
+                "openocd.cfg"
+            ]
+        }
+    ]
+}
