@@ -85,6 +85,7 @@ typedef struct {
 
 char output[4096];
 engine_state engine;
+uint8_t save_status;
 uint16_t* adcResult[4];
 uint16_t (*eepromBuffer)[ROWS][COLS];
 uint16_t (*injectorMap)[ROWS][COLS];
@@ -142,6 +143,7 @@ int main(void)
 			(*eepromBuffer)[i][j] = 0;
 		}
 	}
+  save_status = 0;
 	EEPROM_Load(0x0, eepromBuffer, (ROWS * COLS) * sizeof(uint16_t));
   /* USER CODE END 2 */
 
@@ -487,7 +489,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
   } else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) { // Falling Edge
     HAL_GPIO_WritePin(INJECTOR_GPIO_Port, INJECTOR_Pin, 0); // Turn off injector
     uint16_t pulse = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
-    *(injectorMap)[engine.rpm_index][engine.throttle_index] = pulse;
+    (*injectorMap)[engine.rpm_index][engine.throttle_index] = pulse;
   }
 }
 
@@ -500,6 +502,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     engine.rpm = (10000/engine.period)*2*60;
     engine.rpm_index = engine.rpm/250;
     engine.throttle_index = ( ((uint32_t)adcResult[0]) - MINSAMPLE) * CORRFACTOR;
+
+    if(save_status) {
+      for (int i = 0; i <= (ROWS * COLS * sizeof(uint16_t)) / 16; i++) {
+			  while (HAL_I2C_IsDeviceReady(&hi2c1, EEPROM_DEV_ADDR, 1, HAL_MAX_DELAY) != HAL_OK);
+			  EEPROM_Save(i * 16, (uint8_t*)eepromBuffer + i*16, 16);
+      }
+      save_status = 0;
+    }
   }
 }
 
@@ -534,6 +544,10 @@ void USB_VDP_Parser(uint8_t* buf, uint32_t *len) {
           CDC_Transmit_FS((uint8_t *)eepromBuffer, ROWS * COLS * 2); 
         }
         break;
+        case 'm': {
+          CDC_Transmit_FS((uint8_t *)injectorMap, ROWS * COLS * 2);
+          break;
+        }
         default:
         break;
       }
@@ -548,6 +562,7 @@ void USB_VDP_Parser(uint8_t* buf, uint32_t *len) {
         offset = 0;
         length = 0;
         received = 0;
+        save_status = 1;
       }
     }
   }
@@ -563,6 +578,8 @@ void USB_VDP_Parser(uint8_t* buf, uint32_t *len) {
  * size_of_data: n* of byte to save to the EEPROM
  * 
  * Returns: HAL_StatusTypeDef
+ * 
+ * ! YOU CAN ONLY WRITE 16 BYTES EVERY CALL
  */
 HAL_StatusTypeDef EEPROM_Save(uint16_t address, void *data, size_t size_of_data) {
 	return HAL_I2C_Mem_Write(&hi2c1, EEPROM_DEV_ADDR | ((address >> 7)),
