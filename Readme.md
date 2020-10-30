@@ -1,5 +1,7 @@
 OpenEFI is a firmware to modify the injector width in function of RPM and Throttle position.
 
+![GitHub](https://img.shields.io/github/license/alsacchi/OpenECU-Yamaha?style=flat-square)
+
 ## Dependencies
 
 GNU-Arm GCC compiler is needed.
