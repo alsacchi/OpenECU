@@ -76,13 +76,19 @@ HAL_StatusTypeDef EEPROM_Load(uint16_t Address, void *data, size_t size_of_data)
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint16_t period;
-uint16_t rpm;
-uint16_t rpm_index;
-uint16_t throttle_index;
+typedef struct {
+  uint16_t period;
+  uint16_t rpm;
+  uint16_t rpm_index;
+  uint16_t throttle_index;
+} engine_state;
+
+char output[4096];
+engine_state engine;
 uint16_t* adcResult[4];
-uint16_t* eepromBuffer;
-uint16_t* injectorMap;
+uint16_t (*eepromBuffer)[ROWS][COLS];
+uint16_t (*injectorMap)[ROWS][COLS];
+
 
 /* USER CODE END 0 */
 
@@ -127,12 +133,13 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim4);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adcResult, 2);
 
-  injectorMap = (uint16_t *) malloc(COLS * ROWS * sizeof(uint16_t));
-	eepromBuffer = (uint16_t *) malloc(COLS * ROWS * sizeof(uint16_t));
+  
+  injectorMap = malloc(sizeof(*injectorMap));
+  eepromBuffer = malloc(sizeof(*eepromBuffer));
   for (int i = 0; i < ROWS; i++) {
 		for (int j = 0; j < COLS; j++) {
-			*(injectorMap + i*COLS + j) = 0;
-			*(eepromBuffer + i*COLS + j) = 0;
+			(*injectorMap)[i][j] = 0;
+			(*eepromBuffer)[i][j] = 0;
 		}
 	}
 	EEPROM_Load(0x0, eepromBuffer, (ROWS * COLS) * sizeof(uint16_t));
@@ -470,27 +477,79 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
 
   if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1) { // Rising Edge
     HAL_GPIO_WritePin(INJECTOR_GPIO_Port, INJECTOR_Pin, 1); // Turn on injector
-    period = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+    engine.period = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
 
   } else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2) { // Falling Edge
     HAL_GPIO_WritePin(INJECTOR_GPIO_Port, INJECTOR_Pin, 0); // Turn off injector
     uint16_t pulse = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
-    *(injectorMap + rpm_index*COLS + throttle_index) = pulse;
+    *(injectorMap)[engine.rpm_index][engine.throttle_index] = pulse;
   }
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+
+  /**
+   *  Timer loop, every 100ms this code will be executed 
+  */
   if(htim->Instance == TIM4) { // 100ms LOOP
-    char output[256];
-    rpm = (10000/period)*2*60;
-    rpm_index = rpm/250;
-    throttle_index = ( ((uint32_t)adcResult[0]) - MINSAMPLE) * CORRFACTOR;
-    sprintf(output, "Period: %d, Rpm: %d\n", period, rpm);
-    CDC_Transmit_FS((unsigned char*) output, strlen(output) + 1);
+    engine.rpm = (10000/engine.period)*2*60;
+    engine.rpm_index = engine.rpm/250;
+    engine.throttle_index = ( ((uint32_t)adcResult[0]) - MINSAMPLE) * CORRFACTOR;
+  }
+}
+
+char command = 0;
+uint16_t offset=0;
+uint16_t length=0;
+uint16_t received=0;
+
+void USB_VDP_Parser(uint8_t* buf, uint32_t *len) {
+  if(buf != 0) {
+    /**
+     * Write Command 'w'
+     * Args:  
+     *        Pos  | Bits 
+     * Offset 0x01 | 16
+     * Length 0x03 | 16
+     * Data   0x04 | ...
+    */
+    uint8_t skipped = 0;
+    if(command == 0) {
+      switch(*buf) {
+        case 'w': {
+          	command = *buf++;
+          	offset = *((uint16_t *)buf);
+          	buf+=2;
+          	length = *((uint16_t *)buf);
+          	buf+=2;
+          	skipped = 5;
+        }
+        break;
+        case 'r': {
+          CDC_Transmit_FS((uint8_t *)eepromBuffer, ROWS * COLS * 2); 
+        }
+        break;
+        default:
+        break;
+      }
+    } 
+    if (command == 'w') {
+      uint16_t currentLen = *len - skipped;
+      memcpy(((uint8_t *)eepromBuffer) + offset, buf, currentLen);
+      offset += currentLen;
+      received += currentLen;
+      if ( received >= length) {
+        command = 0;
+        offset = 0;
+        length = 0;
+        received = 0;
+      }
+    }
   }
 }
 
@@ -501,7 +560,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
  * --------------------------------------------------------------------------------
  * address: memory address to indicate where to save the data
  * data: data to save inside the EEPROM
- * size_of_data: size of 'data'
+ * size_of_data: n* of byte to save to the EEPROM
  * 
  * Returns: HAL_StatusTypeDef
  */
@@ -518,7 +577,7 @@ HAL_StatusTypeDef EEPROM_Save(uint16_t address, void *data, size_t size_of_data)
  * --------------------------------------------------------------------------------
  * address: memory address to indicate where to retrive the data
  * data: data pointer that will contain data from the EEPROM
- * size_of_data: size of 'data'
+ * size_of_data: n* of byte to read from the EEPROM
  * 
  * Returns HAL_StatusTypeDef
 */

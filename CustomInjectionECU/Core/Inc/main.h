@@ -53,7 +53,7 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
+void USB_VDP_Parser(uint8_t* Buf, uint32_t *Len);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

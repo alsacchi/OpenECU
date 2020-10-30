@@ -199,6 +199,19 @@ clean:
 	-rd /s /q $(BUILD_DIR)
   
 #######################################
+# flash to STM32
+#######################################
+flash: 
+	-openocd -f openocd.cfg -c "program build/CustomInjectionECU.elf verify reset exit"
+
+#######################################
+# Debug
+#######################################
+debug:
+	-openocd -f openocd.cfg
+
+
+#######################################
 # dependencies
 #######################################
 -include $(wildcard $(BUILD_DIR)/*.d)
