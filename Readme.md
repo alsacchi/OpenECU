@@ -12,11 +12,11 @@ GNU-Arm GCC compiler is needed.
 
 ## Todo
 
-- [x] Copy Injection Signal
-- [x] Save injection pulse time to injectorMap
-- [x] USB Commands
-- [ ] RealTime edit to injection pulse time
-- [ ] Fancy mobile App
+- &#9745; Copy Injection Signal
+- &#9745; Save injection pulse time to injectorMap
+- &#9745; USB Commands
+- &#9744; RealTime edit to injection pulse time
+- &#9744; Fancy mobile App
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
