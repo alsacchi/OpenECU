@@ -4,7 +4,7 @@ OpenEFI is the software for a custom module that is installed between your origi
 
 ## Features
 
-* Realtime edit to injection duty cycle using saved values inside EEPROM.
+* (WIP)Realtime edit to injection duty cycle using saved values inside EEPROM.
 * Realtime map learning.
 * Realtime info via USB Serial Communication.
 
