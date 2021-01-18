@@ -1,6 +1,12 @@
-OpenEFI is a firmware for a custom module that modify the duty cycle of a injector pulse in function of RPM and Throttle position.
+OpenEFI is the software for a custom module that is installed between your original ECU and the injector/s.
 
 ![GitHub](https://img.shields.io/github/license/alsacchi/OpenECU-Yamaha?style=flat-square)
+
+## Features
+
+* Realtime edit to injection duty cycle using saved values inside EEPROM.
+* Realtime map learning.
+* Realtime info via USB Serial Communication.
 
 ## Tested Bikes
 
