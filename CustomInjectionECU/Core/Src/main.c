@@ -19,12 +19,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usb_device.h"
-#include "usbd_cdc_if.h"
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,6 +56,8 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
+UART_HandleTypeDef huart1;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -69,6 +71,7 @@ static void MX_TIM2_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 HAL_StatusTypeDef EEPROM_Save(uint16_t Address, void *data,
                               size_t size_of_data);
@@ -93,6 +96,7 @@ engine_state engine;
 uint8_t counter;
 uint8_t telemetry;
 uint8_t save_status;
+uint8_t *uartBuffer_1;
 uint16_t adcResult[4];
 uint16_t (*eepromBuffer)[ROWS][COLS];
 uint16_t (*injectorMap)[ROWS][COLS];
@@ -103,8 +107,7 @@ uint16_t (*injectorMap)[ROWS][COLS];
   * @brief  The application entry point.
   * @retval int
   */
-int main(void)
-{
+int main(void) {
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -130,16 +133,15 @@ int main(void)
   MX_DMA_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
-  MX_USB_DEVICE_Init();
   MX_I2C1_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
     HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
     HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
     HAL_TIM_Base_Start_IT(&htim4);
     HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adcResult, 2);
-
     injectorMap = malloc(sizeof(*injectorMap));
     eepromBuffer = malloc(sizeof(*eepromBuffer));
     for (int i = 0; i < ROWS; i++) {
@@ -148,10 +150,14 @@ int main(void)
             (*eepromBuffer)[i][j] = 0;
         }
     }
+    uartBuffer_1 = malloc(sizeof(char) * 1024);
     save_status = 0;
     telemetry = 0;
     counter = 0;
     EEPROM_Load(0x0, eepromBuffer, (ROWS * COLS) * sizeof(uint16_t));
+    HAL_UART_Receive_IT(&huart1, uartBuffer_1, 1);
+    
+    
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -201,9 +207,8 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_USB;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
   PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
-  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -431,7 +436,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 7200-1;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 50-1;
+  htim4.Init.Period = 1000-1;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -452,6 +457,39 @@ static void MX_TIM4_Init(void)
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
 
 }
 
@@ -555,7 +593,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
           counter = 0;
           if(telemetry) {
             snprintf(info, 30, "%u-%u-%u-%u-%u", engine.rpm, adcResult[0], engine.rpm_index, engine.throttle_index, engine.edit);
-            CDC_Transmit_FS((uint8_t *)info, 5*2 + 4);
+            HAL_UART_Transmit_IT(&huart1, (uint8_t *)info, 5*2 + 4);
           }
         }
     }
@@ -569,16 +607,14 @@ uint16_t received = 0;
 
 
 /**
- * Function USB_VDP_Parser
+ * Function USART CALLBACK
  * --------------------------------------------------------------------------------
- * Parse USB Commands and Data
+ * Parse USART Commands and Data
  * --------------------------------------------------------------------------------
- * buf: USB buffer
- * len: USB buffer data length
+ * huart: UART Handle
  *
  */
-void USB_VDP_Parser(uint8_t *buf, uint32_t *len) {
-    if (buf != 0) {
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     /**
     * Write Command 'w'
     * Args:
@@ -587,48 +623,49 @@ void USB_VDP_Parser(uint8_t *buf, uint32_t *len) {
     * Length 0x03 | 16
     * Data   0x04 | ...
     */
-        uint8_t skipped = 0;
-        if (command == 0) {
-            switch (*buf) {
-                case 'w': { // Write to the EEPROM
-                    command = *buf++;
-                    offset = *((uint16_t *)buf);
-                    buf += 2;
-                    length = *((uint16_t *)buf);
-                    buf += 2;
-                    skipped = 5;
-                } break;
-                case 'r': { // Send eepromBuffer via Serial USB
-                    CDC_Transmit_FS((uint8_t *)eepromBuffer, ROWS * COLS * 2);
-                } break;
-                case 'm': { // Send injectorMAP via Serial USB
-                    CDC_Transmit_FS((uint8_t *)injectorMap, ROWS * COLS * 2);
-                }  break;
-                case 'i': { // Send realtime info, RPM, ADCRESULT, RPM_INDEX, THROTTLE_INDEX
-                    telemetry = !telemetry;
-                } break;
-                case 's': {
-                    memcpy((uint8_t *)eepromBuffer, injectorMap, ROWS * COLS * 2); 
-                    save_status = 1; 
-                } break;
-                default:
-                    break;
-            }
-        }
-        if (command == 'w') {
-            uint16_t currentLen = *len - skipped;
-            memcpy(((uint8_t *)eepromBuffer) + offset, buf, currentLen);
-            offset += currentLen;
-            received += currentLen;
-            if (received >= length) {
-                command = 0;
-                offset = 0;
-                length = 0;
-                received = 0;
-                save_status = 1;
-            }
-        }
-    }
+  if (command == 0) {
+      switch (*uartBuffer_1) {
+          case 'w': { // Write to the EEPROM
+              command = *uartBuffer_1++;
+              HAL_UART_Receive_IT(&huart1, uartBuffer_1, 4);
+              // offset = *((uint16_t *)uartBuffer_1);
+              // uartBuffer_1 += 2;
+              // length = *((uint16_t *)uartBuffer_1);
+              // uartBuffer_1 += 2;
+              // skipped = 5;
+          } break;
+          case 'r': { // Send eepromBuffer via USART1
+            HAL_UART_Transmit_IT(&huart1, (uint8_t *)eepromBuffer, ROWS * COLS * 2);
+          } break;
+          case 'm': { // Send injectorMAP via Serial USB
+              HAL_UART_Transmit_IT(&huart1, (uint8_t *)injectorMap, ROWS * COLS * 2);
+          }  break;
+          case 'i': { // Send realtime info, RPM, ADCRESULT, RPM_INDEX, THROTTLE_INDEX
+              telemetry = !telemetry;
+          } break;
+          case 's': {
+              memcpy((uint8_t *)eepromBuffer, injectorMap, ROWS * COLS * 2); 
+              save_status = 1; 
+          } break;
+          default:
+              break;
+      }
+  }
+  if (command == 'w') {
+      length = *(uartBuffer_1);
+      offset = *(uartBuffer_1 + 2);
+      memcpy(((uint8_t *)eepromBuffer) + offset, uartBuffer_1, length);
+      // offset += currentLen;
+      // received += currentLen;
+      // if (received >= length) {
+      command = 0;
+      offset = 0;
+      length = 0;
+      received = 0;
+      save_status = 1;
+      // }
+  }
+  HAL_UART_Receive_IT(&huart1, uartBuffer_1, 1);
 }
 
 /**

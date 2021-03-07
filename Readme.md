@@ -19,9 +19,9 @@ GNU-Arm GCC compiler is needed.
 ## Todo
 
 - &#9745; Copy Injection Signal
-- &#9745; Save injection pulse time to injectorMap
+- &#9745; Save injection duty cycle to injectorMap
 - &#9745; USB Commands
-- &#9745; RealTime edit to injection pulse time
+- &#9745; RealTime edit to injection duty cycle
 - &#9744; Fancy mobile App
 
 ## Contributing
